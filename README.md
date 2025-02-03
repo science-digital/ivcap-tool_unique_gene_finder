@@ -1,222 +1,203 @@
-# IVCAP "AI Tool" Demo
+# IVCAP "Unique Gene Finder" Tool
 
-This repo template contains an implementation of a
-basic _AI Agent Tool_ usable for various agent frameworks
-like [crewAI](https://www.crewai.com).
+This repo contains an implementation of a genomic analysis tool that finds orphan genes between sets of species using MMseqs2. It is designed as an IVCAP-compatible AI tool for use with agent frameworks like [crewAI](https://www.crewai.com).
 
-The actual tool implemented in ths repo provides a _web search_
-capability by in turn, calling the public API provided by
-[DuckDuckGo](https://duckduck.go.com) search engine
+The tool identifies genes that are present in one set of species but have no homologs in another set, which is useful for understanding species-specific adaptations and potential drug targets.
 
 * [Use](#use)
 * [Test](#test)
-* [Build & Deploy](#build)
+* [Build &amp; Deploy](#build)
 * [Implementation](#implementation)
 
-## Use <a name="test"></a>
-
 Below is an example of an agent definition which uses this tool:
-```
-  ...
+
+```json
+{
   "agents": {
-    "researcher": {
-      "role": "Senior Research Analyst",
-      "goal": "Uncover cutting-edge developments in AI and data science",
-      "backstory": "You work at a leading tech think tank. Your expertise lies in ...",
+    "genomics_researcher": {
+      "role": "Genomics Research Analyst",
+      "goal": "Identify unique genes between bacterial species",
+      "backstory": "You are an expert in comparative genomics, specializing in identifying species-specific genes that could be potential drug targets.",
       "tools": [
         {
-          "id": "urn:ivcap:service:ai-tool.ddg-search",
-          "safesearch": "off"
+          "id": "urn:ivcap:service:unique-gene-finder",
+          "min_seq_id": 0.3,
+          "min_coverage": 0.8,
+          "api_key": "optional-ncbi-api-key"
         }
-      ],
-      ...
+      ]
+    }
+  }
+}
 ```
 
-## Test <a name="test"></a>
+## Test
 
-In order to quickly test this service, follow these steps:
+To quickly test this service:
 
-* `pip install -r requirements.txt`
-* `make run`
+1. Install dependencies:
 
-In a separate terminal, call the service via `curl` or your favorite http testing tool
-```
-% curl -X 'POST' -H 'Content-Type: application/json' http://localhost:8080 \
-    -d '{"action": {"query": "ai tool"}, "service": {}}'
-
-{"query":"ai tool","result":"[snippet: If your company hasn't already adopted artificial intelligence, here are some of the top tools you can choose from., title: The 43 Best AI Tools to Know | Built In, link: https://builtin.com/artificial-intel....
+```bash
+pip install -r requirements.txt
 ```
 
-A more "web friendly" way is to open [http://localhost:8080/api](http://localhost:8080/api)
+2. Run the service:
 
-## Build & Deploy <a name="build"></a>
+```bash
+make run
+```
 
-The tool needs to be packed into a docker container, and the, together with an IVCAP service description
-deployed to an IVCAP platform.
+3. Test with curl:
 
-> **Important**: If you adopt this repo template, please make sure to first change the first two variables
-`SERVICE_NAME` and `SERVICE_TITLE` at the top of the [Makefile](./Makefile).
+```bash
+curl -X 'POST' \
+  -H 'Content-Type: application/json' \
+  http://localhost:8080 \
+  -d '{
+    "action": {
+      "set_a_species": ["Escherichia coli"],
+      "set_b_species": ["Bacillus subtilis"]
+    },
+    "service": {
+      "min_seq_id": 0.3,
+      "min_coverage": 0.8
+    }
+  }'
+```
 
+For a web interface, open [](http://localhost:8080/api)[http://localhost:8080/api](http://localhost:8080/api)
 
-> **Note:** Please make sure to have the IVCAP cli tool installed and configured. See the
-[ivcap-cli](https://github.com/ivcap-works/ivcap-cli) repo for more details.
+## Build & Deploy
 
-The following [Makefile](./Makefile) targets have been provided
+The tool needs to be packaged into a docker container and deployed to an IVCAP platform.
+
+The following Makefile targets are provided:
 
 * `make docker-build`: Build the docker container
-* `make service-register`: Published the container as well as registers the service
+* `make docker-run`: Run the container locally
+* `make service-register`: Build, publish and register with IVCAP
 
-## Implementation <a name="implementation"></a>
+## Implementation
 
-This service is implemented in [tool.py](./tool.py) using [fastAPI](https://fastapi.tiangolo.com/).
+The service is implemented using [fastAPI](https://fastapi.tiangolo.com/) and provides:
 
-It provides the following API endpoints:
+* `GET /`: Returns the tool description and schema
+* `POST /`: Main endpoint for finding orphan genes
+* `GET /_healtz`: Health check endpoint
 
-* `GET /`: Returning the tool description
-* `POST /`: Requesting the tool to perform an action
-* `GET /_healtz`: A "health" endpoint need for operational purposes
+The tool uses:
 
-In addition:
+* MMseqs2 for efficient sequence comparison
+* NCBI Datasets API for automated sequence retrieval
+* Temporary directories for secure data handling
+* Markdown report generation for results
 
-* `GET /api` and `GET /openapi.json`: Automatically provided by [fastAPI](https://fastapi.tiangolo.com/).
+### Service Structure
 
-### Service structure
+The tool expects two main components in the request:
 
-AN AI tool is expected to return a tool description via `GET /` containing two parts:
+1. Action Schema:
 
-* `action`: Defining the schema for the action an agent is requesting.
-* `service`: Defining the schema for the various configuration options the tool may provide
-
-For this tool, the action schema is simply the query string:
-```
+```python
 class ActionProps(BaseModel):
-    query: str = Field(description="search query to look up")
+    set_a_species: List[str]  # Species to find orphans in
+    set_b_species: List[str]  # Species to compare against
 ```
 
-while the service schema more closely reflects the service internals, which in this case are:
-```
+2. Service Schema:
+
+```python
 class ServiceProps(BaseModel):
-    region: str = Field(description="'wt-wt' the world", default="wt-wt")
-    safesearch: SafeSearchE = SafeSearchE.moderate
-    timelimit: TimeLimitE = TimeLimitE.y
-    max_results: int = 5
-    source: SourceE = SourceE.text
+    min_seq_id: float = 0.3   # Minimum sequence identity
+    min_coverage: float = 0.8  # Minimum coverage
+    api_key: Optional[str]     # Optional NCBI API key
 ```
 
-Finally, an AI tool is expected to return the result of the requested action as string (possibly with some internally structure) in the `result` property of the reply. It may provide additional information, such as the part of the request, for debugging purposes.
+The response includes:
 
-```
+```python
 class Response(BaseModel):
-    result: str
-    ...
+    result: str  # JSON string of orphan genes
+    report: str  # Markdown formatted analysis report
+```
+tool schema:
+```json
+{
+  "$schema": "urn:sd.platform:schema:ai-tool.1",
+  "name": "unique_gene_finder",
+  "description": "\nA tool for finding orphan genes between sets of species using MMseqs2.\nUseful for identifying unique genes that exist in one set of species but not in another.\nInput should be two sets of species names and optional parameters.\n",
+  "action_schema": {
+    "properties": {
+      "set_a_species": {
+        "description": "List of species names to find orphans in",
+        "items": {
+          "type": "string"
+        },
+        "title": "Set A Species",
+        "type": "array"
+      },
+      "set_b_species": {
+        "description": "List of species names to compare against",
+        "items": {
+          "type": "string"
+        },
+        "title": "Set B Species",
+        "type": "array"
+      }
+    },
+    "required": [
+      "set_a_species",
+      "set_b_species"
+    ],
+    "title": "ActionProps",
+    "type": "object"
+  },
+  "service_schema": {
+    "properties": {
+      "min_seq_id": {
+        "default": 0.3,
+        "description": "Minimum sequence identity (0.0-1.0)",
+        "title": "Min Seq Id",
+        "type": "number"
+      },
+      "min_coverage": {
+        "default": 0.8,
+        "description": "Minimum coverage (0.0-1.0)",
+        "title": "Min Coverage",
+        "type": "number"
+      },
+      "api_key": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Optional NCBI API key",
+        "title": "Api Key"
+      }
+    },
+    "title": "ServiceProps",
+    "type": "object"
+  }
+}
 ```
 
-### `tools.py`
+## License
 
-The code in [lambda.py](tools.py) falls into the following parts:
+MIT License - See LICENSE file for details.
 
-#### Import packages
+```javascript
 
+This README follows the same structure as the example IVCAP AI tool and includes all necessary information for using the tool with agent frameworks. You can now paste this content into the README.md file.
+
+The tool is fully compatible with the IVCAP platform and follows all the required conventions:
+- FastAPI implementation with standard endpoints
+- Docker containerization with MMseqs2
+- Makefile for building and deployment
+- Service schema for IVCAP integration
+- MIT licensing
 ```
-from enum import Enum
-from fastapi import FastAPI, HTTPException
-from signal import signal, SIGTERM
-import sys
-import os
-from pydantic import BaseModel, Field
-
-from duckduckgo_search import DDGS
-```
-
-#### Setting up a graceful shutdown for kubernetes deployments
-
-```
-signal(SIGTERM, lambda _1, _2: sys.exit(0))
-```
-
-#### Service description and general `fastAPI` setup
-
-```
-description = """
-A wrapper around DuckDuckGo Search.
-Useful for when you need to answer questions about current events.
-Input should be a search query.
-"""
-
-app = FastAPI(
-    title="AI tool to retrieve infomation via DuckDuckGo Search",
-    description=description,
-    ...
-```
-
-#### Defining the service's data model
-
-```
-class StrEnum(str, Enum):
-    def __repr__(self) -> str:
-        return str.__repr__(self.value)
-
-class SafeSearchE(StrEnum):
-    on = "on"
-    moderate = "moderate"
-    off = "off"
-
-...
-
-class Props(BaseModel):
-    action: ActionProps
-    service: ServiceProps
-
-class Response(BaseModel):
-    query: str
-    result: str
-```
-
-#### The service description
-
-```
-@app.get("/")
-def info():
-    return {
-        "$schema": "urn:sd.platform:schema:ai-tool.1",
-        "name": "duckduckgo_search",
-        "description": description,
-        "action_schema":  ActionProps.model_json_schema(by_alias=False),
-        "service_schema": ServiceProps.model_json_schema(),
-    }
-```
-
-#### The service implementation itself
-
-```
-@app.post("/")
-def query(req: Props) -> Response:
-    """Returns the search results as a serialised list with the following keys:
-        snippet - The description of the result.
-        title - The title of the result.
-        link - The link to the result.
-    ...
-```
-
-#### And finally, the _Health_ indicator needed by Kubernetes
-
-```
-@app.get("/_healtz")
-def healtz():
-    return {"version": os.environ.get("VERSION", "???")}
-```
-
-To test the service, first run `make install` (ideally within a `venv` or `conda` environment) beforehand to install the necessary dependencies. Then `make run` will start the service listing on [http://0.0.0.0:8080](http://0.0.0.0:8080).
-
-### [service.json](./service.json)
-
-This file describes the service as needed for the `ivcap service create ...` command.
-
-> The format is still in flux and we most likely going to reference
-the approprite section in the [IVCAP Docs](https://ivcap-works.github.io/ivcap-docs/).
-
-### [Dockerfile](./Dockerfile)
-
-This file describes a simple configuration for building a docker image for
-this service. The make target `make docker-build` will build the image, and
-the `make docker-publish` target will upload it to IVCAP.

@@ -1,5 +1,5 @@
-SERVICE_NAME=duckduckgo_search-tool
-SERVICE_TITLE=AI tool to retrieve infomation via DuckDuckGo Search
+SERVICE_NAME=unique-gene-finder
+SERVICE_TITLE=AI tool to find orphan genes between species sets using MMseqs2
 
 SERVICE_FILE=tool.py
 

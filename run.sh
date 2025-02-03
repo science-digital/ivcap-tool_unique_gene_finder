@@ -1,3 +1,3 @@
 #!/bin/sh
-echo "INFO     AI tool to retrieve infomation via DuckDuckGo Search - $VERSION"
-fastapi run tool.py --proxy-headers --port 8080
+echo "INFO     Unique Gene Finder - $VERSION"
+uvicorn tool:app --host 0.0.0.0 --port 8080 --proxy-headers

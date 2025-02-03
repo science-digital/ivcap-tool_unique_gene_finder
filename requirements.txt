@@ -1,3 +1,6 @@
 fastapi[standard] >= 0.111.1
-duckduckgo_search
+uvicorn[standard]
 pydantic
+biopython
+pandas
+requests

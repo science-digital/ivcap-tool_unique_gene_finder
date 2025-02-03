@@ -1,12 +1,24 @@
-FROM python:3.11.9-slim-bookworm AS builder
+FROM ghcr.io/soedinglab/mmseqs2 AS mmseqs
+
+FROM python:3.11.9-slim-bookworm
 
 WORKDIR /app
-RUN pip install -U pip
-COPY requirements.txt ./
-RUN pip install -r requirements.txt --force-reinstall
 
-# Get service files
-ADD tool.py run.sh ./
+# Copy MMseqs2 from official image
+COPY --from=mmseqs /usr/local/bin/entrypoint /usr/local/bin/mmseqs
+
+# Install minimal dependencies
+RUN apt-get update && apt-get install -y \
+    libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install -U pip && pip install -r requirements.txt
+
+# Copy service files
+COPY tool.py run.sh ./
+RUN chmod +x run.sh
 
 # VERSION INFORMATION
 ARG VERSION ???
