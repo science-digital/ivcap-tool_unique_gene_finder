@@ -4,6 +4,7 @@ from signal import signal, SIGTERM
 import sys
 import os
 import json
+import zipfile
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 import tempfile
@@ -32,7 +33,7 @@ app = FastAPI(
     version=os.environ.get("VERSION", "???"),
     contact={
         "name": "CSIRO",
-        "email": "max.ott@data61.csiro.au",
+        "email": "ran12c@csiro.au",
     },
     license_info={
         "name": "MIT",
