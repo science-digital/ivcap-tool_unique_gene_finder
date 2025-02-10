@@ -1,28 +1,33 @@
-FROM ghcr.io/soedinglab/mmseqs2 AS mmseqs
-
 FROM python:3.11.9-slim-bookworm
 
-WORKDIR /app
-
-# Copy MMseqs2 from official image
-COPY --from=mmseqs /usr/local/bin/entrypoint /usr/local/bin/mmseqs
-
-# Install minimal dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    libatomic1 \
+    wget \
+    build-essential \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Install MMseqs2 (using SSE4.1 version instead of AVX2)
+RUN wget https://mmseqs.com/latest/mmseqs-linux-sse41.tar.gz \
+    && tar xvfz mmseqs-linux-sse41.tar.gz \
+    && cp mmseqs/bin/mmseqs /usr/local/bin \
+    && rm -rf mmseqs mmseqs-linux-sse41.tar.gz \
+    && chmod +x /usr/local/bin/mmseqs
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install -U pip && pip install -r requirements.txt
 
-# Copy service files
-COPY tool.py run.sh ./
-RUN chmod +x run.sh
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# VERSION INFORMATION
-ARG VERSION ???
-ENV VERSION=$VERSION
+# Copy application code
+COPY . .
 
-# Command to run
-ENTRYPOINT ["/app/run.sh"]
+# Expose port
+EXPOSE 8080
+
+# Run the application
+CMD ["uvicorn", "tool:app", "--host", "0.0.0.0", "--port", "8080"]
